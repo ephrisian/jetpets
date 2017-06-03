@@ -1,7 +1,7 @@
 "use strict";
 
 const OFFLINE_DATA_FILE = "offline.js";
-const CACHE_NAME_PREFIX = "c2offline";
+const CACHE_NAME_PREFIX = "c3offline";
 const BROADCASTCHANNEL_NAME = "offline";
 const CONSOLE_PREFIX = "[SW] ";
 
@@ -48,14 +48,14 @@ function BroadcastUpdateReady(version)
 function GetCacheBaseName()
 {
 	// Include the scope to avoid name collisions with any other SWs on the same origin.
-	// e.g. "c2offline-https://example.com/foo/" (won't collide with anything under bar/)
+	// e.g. "c3offline-https://example.com/foo/" (won't collide with anything under bar/)
 	return CACHE_NAME_PREFIX + "-" + self.registration.scope;
 };
 
 function GetCacheVersionName(version)
 {
 	// Append the version number to the cache name.
-	// e.g. "c2offline-https://example.com/foo/-v2"
+	// e.g. "c3offline-https://example.com/foo/-v2"
 	return GetCacheBaseName() + "-v" + version;
 };
 
@@ -69,6 +69,18 @@ function GetAvailableCacheNames()
 		const cacheBaseName = GetCacheBaseName();
 		return cacheNames.filter(n => n.startsWith(cacheBaseName));
 	});
+};
+
+function GetNumberOfClientsOnReload()
+{
+	const ua = navigator.userAgent;
+	const isEdge = /edge\//i.test(ua);
+	const isChrome = (/chrome/i.test(ua) || /chromium/i.test(ua)) && !isEdge;
+	
+	// Chrome quirk: in a navigate fetch to reload the page, clients.matchAll() returns 2 clients
+	// (the old and the new). In Firefox, it returns 1. It's not clear which is the correct answer.
+	// TODO: find a less hacky way to solve this.
+	return isChrome ? 2 : 1;
 };
 
 // Identify if an update is pending, which is the case when we have 2 or more available caches.
@@ -156,7 +168,7 @@ function CreateCacheFromFileList(cacheName, fileList, bypassCache)
 			if (!response.ok)
 			{
 				allOk = false;
-				console.error(CONSOLE_PREFIX + "Error fetching '" + originalUrl + "' (" + response.status + " " + response.statusText + ")");
+				console.error(CONSOLE_PREFIX + "Error fetching '" + response.url + "' (" + response.status + " " + response.statusText + ")");
 			}
 		}
 		
@@ -189,7 +201,13 @@ function UpdateCheck(isFirst)
 {
 	// Always bypass cache when requesting offline.js to make sure we find out about new versions.
 	return fetchWithBypass(OFFLINE_DATA_FILE, true)
-	.then(r => r.json())
+	.then(response =>
+	{
+		if (!response.ok)
+			throw new Error(OFFLINE_DATA_FILE + " responded with " + response.status + " " + response.statusText);
+		
+		return response.json();
+	})
 	.then(data =>
 	{
 		const version = data.version;
@@ -302,9 +320,7 @@ self.addEventListener('fetch', event =>
 			{
 				// If there are other clients open, don't expire anything yet. We don't want to delete any caches they
 				// might be using, which could cause mixed-version responses.
-				// TODO: verify client count is as expected in navigate requests.
-				// TODO: find a way to upgrade on reloading the only client. Chrome seems to think there are 2 clients in that case.
-				if (clients.length > 1)
+				if (clients.length > GetNumberOfClientsOnReload())		// note browser differences here
 					return availableCacheNames[0];
 				
 				// Identify newest cache to use. Delete all the others.
