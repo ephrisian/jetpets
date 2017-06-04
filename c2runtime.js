@@ -34236,7 +34236,21 @@ cr.getObjectRefTable = function () {
 		cr.behaviors.Physics.prototype.acts.SetImmovable,
 		cr.plugins_.Sprite.prototype.acts.SetAngle,
 		cr.system_object.prototype.exps.newline,
-		cr.plugins_.Touch.prototype.cnds.OnTapGestureObject
+		cr.plugins_.Touch.prototype.cnds.OnTapGestureObject,
+		cr.system_object.prototype.cnds.For,
+		cr.system_object.prototype.exps.loopindex,
+		cr.plugins_.Sprite.prototype.exps.Width,
+		cr.plugins_.Sprite.prototype.acts.SetInstanceVar,
+		cr.system_object.prototype.exps.floor,
+		cr.system_object.prototype.cnds.EveryTick,
+		cr.plugins_.Sprite.prototype.acts.SetAnimFrame,
+		cr.plugins_.Sprite.prototype.cnds.IsOverlappingOffset,
+		cr.plugins_.Sprite.prototype.cnds.CompareY,
+		cr.plugins_.Sprite.prototype.acts.MoveAtAngle,
+		cr.plugins_.Touch.prototype.cnds.OnTouchObject,
+		cr.plugins_.Sprite.prototype.acts.SetBoolInstanceVar,
+		cr.plugins_.Sprite.prototype.cnds.IsOverlapping,
+		cr.plugins_.Sprite.prototype.cnds.OnDestroyed
 	];
 };
 
