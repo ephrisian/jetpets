@@ -34235,7 +34235,8 @@ cr.getObjectRefTable = function () {
 		cr.behaviors.LOS.prototype.cnds.HasLOSToObject,
 		cr.behaviors.Physics.prototype.acts.SetImmovable,
 		cr.plugins_.Sprite.prototype.acts.SetAngle,
-		cr.system_object.prototype.exps.newline
+		cr.system_object.prototype.exps.newline,
+		cr.plugins_.Touch.prototype.cnds.OnTapGestureObject
 	];
 };
 
