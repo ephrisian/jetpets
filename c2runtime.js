@@ -31862,421 +31862,6 @@ cr.behaviors.Physics = function(runtime)
 	
 }());
 
-// Custom
-// ECMAScript 5 strict mode
-
-;
-;
-
-/////////////////////////////////////
-// Behavior class
-cr.behaviors.custom = function(runtime)
-{
-	this.runtime = runtime;
-};
-
-(function ()
-{
-	var behaviorProto = cr.behaviors.custom.prototype;
-		
-	/////////////////////////////////////
-	// Behavior type class
-	behaviorProto.Type = function(behavior, objtype)
-	{
-		this.behavior = behavior;
-		this.objtype = objtype;
-		this.runtime = behavior.runtime;
-	};
-	
-	var behtypeProto = behaviorProto.Type.prototype;
-
-	behtypeProto.onCreate = function()
-	{
-	};
-
-	/////////////////////////////////////
-	// Behavior instance class
-	behaviorProto.Instance = function(type, inst)
-	{
-		this.type = type;
-		this.behavior = type.behavior;
-		this.inst = inst;
-		this.runtime = type.runtime;
-		
-		this.dx = 0;
-		this.dy = 0;
-		
-		this.cancelStep = 0;
-	};
-	
-	var behinstProto = behaviorProto.Instance.prototype;
-
-	behinstProto.onCreate = function()
-	{
-		// Load properties
-		this.stepMode = this.properties[0];	// 0=None, 1=Linear, 2=Horizontal then vertical, 3=Vertical then horizontal
-		this.pxPerStep = this.properties[1];
-		this.enabled = this.properties[2];
-	};
-	
-	behinstProto.saveToJSON = function ()
-	{
-		return {
-			"dx": this.dx,
-			"dy": this.dy,
-			"cancelStep": this.cancelStep,
-			"enabled": this.enabled,
-			"stepMode": this.stepMode,
-			"pxPerStep": this.pxPerStep
-		};
-	};
-	
-	behinstProto.loadFromJSON = function (o)
-	{
-		this.dx = o["dx"];
-		this.dy = o["dy"];
-		this.cancelStep = o["cancelStep"];
-		this.enabled = o["enabled"];
-		this.stepMode = o["stepMode"];
-		this.pxPerStep = o["pxPerStep"];
-	};
-	
-	behinstProto.getSpeed = function ()
-	{
-		return Math.sqrt(this.dx * this.dx + this.dy * this.dy);
-	};
-	
-	behinstProto.getAngle = function ()
-	{
-		return Math.atan2(this.dy, this.dx);
-	};
-	
-	function sign(x)
-	{
-		if (x === 0)
-			return 0;
-		else if (x < 0)
-			return -1;
-		else
-			return 1;
-	};
-	
-	behinstProto.step = function (x, y, trigmethod)
-	{
-		if (x === 0 && y === 0)
-			return;
-		
-		var startx = this.inst.x;
-		var starty = this.inst.y;
-		var sx, sy, prog;
-		
-		var steps = Math.round(Math.sqrt(x * x + y * y) / this.pxPerStep);
-		if (steps === 0)
-			steps = 1;
-			
-		var i;
-		for (i = 1; i <= steps; i++)
-		{
-			prog = i / steps;
-			this.inst.x = startx + x * prog;
-			this.inst.y = starty + y * prog;
-			this.inst.set_bbox_changed();
-			
-			this.runtime.trigger(trigmethod, this.inst);
-			
-			if (this.cancelStep === 1)
-			{
-				// Go back a step and stop
-				i--;
-				prog = i / steps;
-				this.inst.x = startx + x * prog;
-				this.inst.y = starty + y * prog;
-				this.inst.set_bbox_changed();
-				return;
-			}
-			else if (this.cancelStep === 2)
-			{
-				// Stop and do nothing
-				return;
-			}
-		}
-	};
-
-	behinstProto.tick = function ()
-	{
-		var dt = this.runtime.getDt(this.inst);
-		var mx = this.dx * dt;
-		var my = this.dy * dt;
-		var i, steps;
-		
-		// Disabled or not moving, nothing to do
-		if ((this.dx === 0 && this.dy === 0) || !this.enabled)
-			return;
-			
-		this.cancelStep = 0;
-			
-		if (this.stepMode === 0)		// none
-		{
-			this.inst.x += mx;
-			this.inst.y += my;
-		}
-		else if (this.stepMode === 1)	// linear
-		{
-			this.step(mx, my, cr.behaviors.custom.prototype.cnds.OnCMStep);
-		}
-		else if (this.stepMode === 2)	// horizontal then vertical
-		{
-			this.step(mx, 0, cr.behaviors.custom.prototype.cnds.OnCMHorizStep);
-			this.cancelStep = 0;
-			this.step(0, my, cr.behaviors.custom.prototype.cnds.OnCMVertStep);
-		}
-		else if (this.stepMode === 3)	// vertical then horizontal
-		{
-			this.step(0, my, cr.behaviors.custom.prototype.cnds.OnCMVertStep);
-			this.cancelStep = 0;
-			this.step(mx, 0, cr.behaviors.custom.prototype.cnds.OnCMHorizStep);
-		}
-		
-		this.inst.set_bbox_changed();
-	};
-	
-
-	//////////////////////////////////////
-	// Conditions
-	function Cnds() {};
-
-	Cnds.prototype.IsMoving = function ()
-	{
-		return this.dx != 0 || this.dy != 0;
-	};
-	
-	Cnds.prototype.CompareSpeed = function (axis, cmp, s)
-	{
-		var speed;
-		
-		switch (axis) {
-		case 0:		speed = this.getSpeed();	break;
-		case 1:		speed = this.dx;			break;
-		case 2:		speed = this.dy;			break;
-		}
-		
-		return cr.do_cmp(speed, cmp, s);
-	};
-	
-	Cnds.prototype.OnCMStep = function ()
-	{
-		return true;
-	};
-	
-	Cnds.prototype.OnCMHorizStep = function ()
-	{
-		return true;
-	};
-	
-	Cnds.prototype.OnCMVertStep = function ()
-	{
-		return true;
-	};
-	
-	behaviorProto.cnds = new Cnds();
-
-	//////////////////////////////////////
-	// Actions
-	function Acts() {};
-
-	Acts.prototype.Stop = function ()
-	{
-		this.dx = 0;
-		this.dy = 0;
-	};
-	
-	Acts.prototype.Reverse = function (axis)
-	{
-		switch (axis) {
-		case 0:
-			this.dx *= -1;
-			this.dy *= -1;
-			break;
-		case 1:
-			this.dx *= -1;
-			break;
-		case 2:
-			this.dy *= -1;
-			break;
-		}
-	};
-	
-	Acts.prototype.SetSpeed = function (axis, s)
-	{
-		var a;
-		
-		switch (axis) {
-		case 0:
-			a = this.getAngle();
-			this.dx = Math.cos(a) * s;
-			this.dy = Math.sin(a) * s;
-			break;
-		case 1:
-			this.dx = s;
-			break;
-		case 2:
-			this.dy = s;
-			break;
-		}
-	};
-	
-	Acts.prototype.Accelerate = function (axis, acc)
-	{
-		var dt = this.runtime.getDt(this.inst);
-		var ds = acc * dt;
-		var a;
-		
-		switch (axis) {
-		case 0:
-			a = this.getAngle();
-			this.dx += Math.cos(a) * ds;
-			this.dy += Math.sin(a) * ds;
-			break;
-		case 1:
-			this.dx += ds;
-			break;
-		case 2:
-			this.dy += ds;
-			break;
-		}
-	};
-	
-	Acts.prototype.AccelerateAngle = function (acc, a_)
-	{
-		var dt = this.runtime.getDt(this.inst);
-		var ds = acc * dt;
-		var a = cr.to_radians(a_);
-		
-		this.dx += Math.cos(a) * ds;
-		this.dy += Math.sin(a) * ds;
-	};
-	
-	Acts.prototype.AcceleratePos = function (acc, x, y)
-	{
-		var dt = this.runtime.getDt(this.inst);
-		var ds = acc * dt;
-		var a = Math.atan2(y - this.inst.y, x - this.inst.x);
-		
-		this.dx += Math.cos(a) * ds;
-		this.dy += Math.sin(a) * ds;
-	};
-	
-	Acts.prototype.SetAngleOfMotion = function (a_)
-	{
-		var a = cr.to_radians(a_);
-		var s = this.getSpeed();
-		
-		this.dx = Math.cos(a) * s;
-		this.dy = Math.sin(a) * s;
-	};
-	
-	Acts.prototype.RotateAngleOfMotionClockwise = function (a_)
-	{
-		var a = this.getAngle() + cr.to_radians(a_);
-		var s = this.getSpeed();
-		
-		this.dx = Math.cos(a) * s;
-		this.dy = Math.sin(a) * s;
-	};
-	
-	Acts.prototype.RotateAngleOfMotionCounterClockwise = function (a_)
-	{
-		var a = this.getAngle() - cr.to_radians(a_);
-		var s = this.getSpeed();
-		
-		this.dx = Math.cos(a) * s;
-		this.dy = Math.sin(a) * s;
-	};
-	
-	Acts.prototype.StopStepping = function (mode)
-	{
-		// set to 1 = go back a step, 2 = stay at current position
-		this.cancelStep = mode + 1;
-	};
-	
-	Acts.prototype.PushOutSolid = function (mode)
-	{
-		var a, ux, uy;
-		switch (mode) {
-		// Opposite angle
-		case 0:
-			// Make unit motion of vector, invert it and push that way
-			a = this.getAngle();
-			ux = Math.cos(a);
-			uy = Math.sin(a);
-			this.runtime.pushOutSolid(this.inst, -ux, -uy, Math.max(this.getSpeed() * 3, 100));
-			break;
-		// Nearest
-		case 1:
-			this.runtime.pushOutSolidNearest(this.inst);
-			break;
-		// Up
-		case 2:
-			this.runtime.pushOutSolid(this.inst, 0, -1, Math.max(Math.abs(this.dy) * 3, 100));
-			break;
-		// Down
-		case 3:
-			this.runtime.pushOutSolid(this.inst, 0, 1, Math.max(Math.abs(this.dy) * 3, 100));
-			break;
-		// Left
-		case 4:
-			this.runtime.pushOutSolid(this.inst, -1, 0, Math.max(Math.abs(this.dx) * 3, 100));
-			break;
-		// Right
-		case 5:
-			this.runtime.pushOutSolid(this.inst, 1, 0, Math.max(Math.abs(this.dx) * 3, 100));
-			break;
-		}
-	};
-	
-	Acts.prototype.PushOutSolidAngle = function (a)
-	{
-		a = cr.to_radians(a);
-		var ux = Math.cos(a);
-		var uy = Math.sin(a);
-		this.runtime.pushOutSolid(this.inst, ux, uy, Math.max(this.getSpeed() * 3, 100));
-	};
-	
-	Acts.prototype.SetEnabled = function (en)
-	{
-		this.enabled = (en === 1);
-	};
-	
-	behaviorProto.acts = new Acts();
-
-	//////////////////////////////////////
-	// Expressions
-	function Exps() {};
-
-	Exps.prototype.Speed = function (ret)
-	{
-		ret.set_float(this.getSpeed());
-	};
-	
-	Exps.prototype.MovingAngle = function (ret)
-	{
-		ret.set_float(cr.to_degrees(this.getAngle()));
-	};
-	
-	Exps.prototype.dx = function (ret)
-	{
-		ret.set_float(this.dx);
-	};
-	
-	Exps.prototype.dy = function (ret)
-	{
-		ret.set_float(this.dy);
-	};
-	
-	behaviorProto.exps = new Exps();
-	
-}());
-
 // Scroll To
 // ECMAScript 5 strict mode
 
@@ -34174,6 +33759,399 @@ cr.behaviors.LOS = function(runtime)
 	
 }());
 
+// Sine
+// ECMAScript 5 strict mode
+
+;
+;
+
+/////////////////////////////////////
+// Behavior class
+cr.behaviors.Sin = function(runtime)
+{
+	this.runtime = runtime;
+};
+
+(function ()
+{
+	var behaviorProto = cr.behaviors.Sin.prototype;
+		
+	/////////////////////////////////////
+	// Behavior type class
+	behaviorProto.Type = function(behavior, objtype)
+	{
+		this.behavior = behavior;
+		this.objtype = objtype;
+		this.runtime = behavior.runtime;
+	};
+	
+	var behtypeProto = behaviorProto.Type.prototype;
+
+	behtypeProto.onCreate = function()
+	{
+	};
+
+	/////////////////////////////////////
+	// Behavior instance class
+	behaviorProto.Instance = function(type, inst)
+	{
+		this.type = type;
+		this.behavior = type.behavior;
+		this.inst = inst;				// associated object instance to modify
+		this.runtime = type.runtime;
+		
+		this.i = 0;		// period offset (radians)
+	};
+	
+	var behinstProto = behaviorProto.Instance.prototype;
+	
+	var _2pi = 2 * Math.PI;
+	var _pi_2 = Math.PI / 2;
+	var _3pi_2 = (3 * Math.PI) / 2;
+	
+	// C2 compatibility: C2 used a different list of movements. To preserve compatibility with the savegame format, convert
+	// the initial movement value on startup. The table below converts the C3 index to the C2 index.
+	// C2 list: 0=Horizontal|1=Vertical|2=Size|3=Width|4=Height|5=Angle|6=Opacity|7=Value only|8=Forwards/backwards
+	// C3 list: 0=Horizontal|1=Vertical|2=Forwards/backwards|3=Width|4=Height|5=Size|6=Angle|7=Opacity|8=Value only
+	var movementLookup = [0, 1, 8, 3, 4, 2, 5, 6, 7];
+
+	behinstProto.onCreate = function()
+	{
+		// Load properties
+		this.movement = movementLookup[this.properties[0]]; // note converted for C2 compatibility, see above
+		this.wave = this.properties[1];		// 0=Sine|1=Triangle|2=Sawtooth|3=Reverse sawtooth|4=Square
+		this.period = this.properties[2];
+		this.period += Math.random() * this.properties[3];								// period random
+		
+		if (this.period === 0)
+			this.i = 0;
+		else
+		{
+			this.i = (this.properties[4] / this.period) * _2pi;							// period offset
+			this.i += ((Math.random() * this.properties[5]) / this.period) * _2pi;		// period offset random
+		}
+		
+		this.mag = this.properties[6];													// magnitude
+		this.mag += Math.random() * this.properties[7];									// magnitude random
+		
+		this.active = this.properties[8];
+		
+		this.initialValue = 0;
+		this.initialValue2 = 0;
+		this.ratio = 0;
+		
+		this.init();
+	};
+	
+	behinstProto.saveToJSON = function ()
+	{
+		return {
+			"i": this.i,
+			"a": this.active,
+			"mv": this.movement,
+			"w": this.wave,
+			"p": this.period,
+			"mag": this.mag,
+			"iv": this.initialValue,
+			"iv2": this.initialValue2,
+			"r": this.ratio,
+			"lkv": this.lastKnownValue,
+			"lkv2": this.lastKnownValue2
+		};
+	};
+	
+	behinstProto.loadFromJSON = function (o)
+	{
+		this.i = o["i"];
+		this.active = o["a"];
+		this.movement = o["mv"];
+		this.wave = o["w"];
+		this.period = o["p"];
+		this.mag = o["mag"];
+		this.initialValue = o["iv"];
+		this.initialValue2 = o["iv2"] || 0;
+		this.ratio = o["r"];
+		this.lastKnownValue = o["lkv"];
+		this.lastKnownValue2 = o["lkv2"] || 0;
+	};
+	
+	behinstProto.init = function ()
+	{
+		switch (this.movement) {
+		case 0:		// horizontal
+			this.initialValue = this.inst.x;
+			break;
+		case 1:		// vertical
+			this.initialValue = this.inst.y;
+			break;
+		case 2:		// size
+			this.initialValue = this.inst.width;
+			this.ratio = this.inst.height / this.inst.width;
+			break;
+		case 3:		// width
+			this.initialValue = this.inst.width;
+			break;
+		case 4:		// height
+			this.initialValue = this.inst.height;
+			break;
+		case 5:		// angle
+			this.initialValue = this.inst.angle;
+			this.mag = cr.to_radians(this.mag);		// convert magnitude from degrees to radians
+			break;
+		case 6:		// opacity
+			this.initialValue = this.inst.opacity;
+			break;
+		case 7:
+			//value only, leave at 0
+			this.initialValue = 0;
+			break;
+		case 8:		// forwards/backwards
+			this.initialValue = this.inst.x;
+			this.initialValue2 = this.inst.y;
+			break;
+		default:
+;
+		}
+		
+		this.lastKnownValue = this.initialValue;
+		this.lastKnownValue2 = this.initialValue2;
+	};
+	
+	behinstProto.waveFunc = function (x)
+	{
+		x = x % _2pi;
+		
+		switch (this.wave) {
+		case 0:		// sine
+			return Math.sin(x);
+		case 1:		// triangle
+			if (x <= _pi_2)
+				return x / _pi_2;
+			else if (x <= _3pi_2)
+				return 1 - (2 * (x - _pi_2) / Math.PI);
+			else
+				return (x - _3pi_2) / _pi_2 - 1;
+		case 2:		// sawtooth
+			return 2 * x / _2pi - 1;
+		case 3:		// reverse sawtooth
+			return -2 * x / _2pi + 1;
+		case 4:		// square
+			return x < Math.PI ? -1 : 1;
+		};
+		
+		// should not reach here
+		return 0;
+	};
+
+	behinstProto.tick = function ()
+	{
+		var dt = this.runtime.getDt(this.inst);
+		
+		if (!this.active || dt === 0)
+			return;
+		
+		if (this.period === 0)
+			this.i = 0;
+		else
+		{
+			this.i += (dt / this.period) * _2pi;
+			this.i = this.i % _2pi;
+		}
+		this.updateFromPhase();
+	};
+	
+	behinstProto.updateFromPhase = function ()
+	{
+		switch (this.movement) {
+		case 0:		// horizontal
+			if (this.inst.x !== this.lastKnownValue)
+				this.initialValue += this.inst.x - this.lastKnownValue;
+				
+			this.inst.x = this.initialValue + this.waveFunc(this.i) * this.mag;
+			this.lastKnownValue = this.inst.x;
+			break;
+		case 1:		// vertical
+			if (this.inst.y !== this.lastKnownValue)
+				this.initialValue += this.inst.y - this.lastKnownValue;
+				
+			this.inst.y = this.initialValue + this.waveFunc(this.i) * this.mag;
+			this.lastKnownValue = this.inst.y;
+			break;
+		case 2:		// size
+			this.inst.width = this.initialValue + this.waveFunc(this.i) * this.mag;
+			this.inst.height = this.inst.width * this.ratio;
+			break;
+		case 3:		// width
+			this.inst.width = this.initialValue + this.waveFunc(this.i) * this.mag;
+			break;
+		case 4:		// height
+			this.inst.height = this.initialValue + this.waveFunc(this.i) * this.mag;
+			break;
+		case 5:		// angle
+			if (this.inst.angle !== this.lastKnownValue)
+				this.initialValue = cr.clamp_angle(this.initialValue + (this.inst.angle - this.lastKnownValue));
+				
+			this.inst.angle = cr.clamp_angle(this.initialValue + this.waveFunc(this.i) * this.mag);
+			this.lastKnownValue = this.inst.angle;
+			break;
+		case 6:		// opacity
+			this.inst.opacity = this.initialValue + (this.waveFunc(this.i) * this.mag) / 100;
+			
+			if (this.inst.opacity < 0)
+				this.inst.opacity = 0;
+			else if (this.inst.opacity > 1)
+				this.inst.opacity = 1;
+				
+			break;
+		case 8:		// forwards/backwards
+			if (this.inst.x !== this.lastKnownValue)
+				this.initialValue += this.inst.x - this.lastKnownValue;
+			if (this.inst.y !== this.lastKnownValue2)
+				this.initialValue2 += this.inst.y - this.lastKnownValue2;
+				
+			this.inst.x = this.initialValue + Math.cos(this.inst.angle) * this.waveFunc(this.i) * this.mag;
+			this.inst.y = this.initialValue2 + Math.sin(this.inst.angle) * this.waveFunc(this.i) * this.mag;
+			this.lastKnownValue = this.inst.x;
+			this.lastKnownValue2 = this.inst.y;
+			break;
+		}
+
+		this.inst.set_bbox_changed();
+	};
+	
+	behinstProto.onSpriteFrameChanged = function (prev_frame, next_frame)
+	{
+		// Handle size change when in width, height or size mode
+		switch (this.movement) {
+		case 2:	// size
+			this.initialValue *= (next_frame.width / prev_frame.width);
+			this.ratio = next_frame.height / next_frame.width;
+			break;
+		case 3:	// width
+			this.initialValue *= (next_frame.width / prev_frame.width);
+			break;
+		case 4:	// height
+			this.initialValue *= (next_frame.height / prev_frame.height);
+			break;
+		}
+	};
+	
+
+	//////////////////////////////////////
+	// Conditions
+	function Cnds() {};
+	
+	Cnds.prototype.IsActive = function ()
+	{
+		return this.active;
+	};
+	
+	Cnds.prototype.CompareMovement = function (m)
+	{
+		return this.movement === m;
+	};
+	
+	Cnds.prototype.ComparePeriod = function (cmp, v)
+	{
+		return cr.do_cmp(this.period, cmp, v);
+	};
+	
+	Cnds.prototype.CompareMagnitude = function (cmp, v)
+	{
+		if (this.movement === 5)
+			return cr.do_cmp(this.mag, cmp, cr.to_radians(v));
+		else
+			return cr.do_cmp(this.mag, cmp, v);
+	};
+	
+	Cnds.prototype.CompareWave = function (w)
+	{
+		return this.wave === w;
+	};
+	
+	behaviorProto.cnds = new Cnds();
+
+	//////////////////////////////////////
+	// Actions
+	function Acts() {};
+	
+	Acts.prototype.SetActive = function (a)
+	{
+		this.active = (a === 1);
+	};
+	
+	Acts.prototype.SetPeriod = function (x)
+	{
+		this.period = x;
+	};
+	
+	Acts.prototype.SetMagnitude = function (x)
+	{
+		this.mag = x;
+		
+		if (this.movement === 5)	// angle
+			this.mag = cr.to_radians(this.mag);
+	};
+	
+	Acts.prototype.SetMovement = function (m)
+	{
+		// Undo radians conversion if in angle mode
+		if (this.movement === 5)
+			this.mag = cr.to_degrees(this.mag);
+			
+		this.movement = m;
+		this.init();
+	};
+	
+	Acts.prototype.SetWave = function (w)
+	{
+		this.wave = w;
+	};
+	
+	Acts.prototype.SetPhase = function (x)
+	{
+		this.i = (x * _2pi) % _2pi;
+		this.updateFromPhase();
+	};
+	
+	Acts.prototype.UpdateInitialState = function ()
+	{
+		this.init();
+	};
+	
+	behaviorProto.acts = new Acts();
+
+	//////////////////////////////////////
+	// Expressions
+	function Exps() {};
+
+	Exps.prototype.CyclePosition = function (ret)
+	{
+		ret.set_float(this.i / _2pi);
+	};
+	
+	Exps.prototype.Period = function (ret)
+	{
+		ret.set_float(this.period);
+	};
+	
+	Exps.prototype.Magnitude = function (ret)
+	{
+		if (this.movement === 5)	// angle
+			ret.set_float(cr.to_degrees(this.mag));
+		else
+			ret.set_float(this.mag);
+	};
+	
+	Exps.prototype.Value = function (ret)
+	{
+		ret.set_float(this.waveFunc(this.i) * this.mag);
+	};
+	
+	behaviorProto.exps = new Exps();
+	
+}());
+
 cr.getObjectRefTable = function () {
 	return [
 		cr.plugins_.Text,
@@ -34186,11 +34164,11 @@ cr.getObjectRefTable = function () {
 		cr.behaviors.Pin,
 		cr.plugins_.Particles,
 		cr.behaviors.Physics,
-		cr.behaviors.custom,
 		cr.behaviors.scrollto,
 		cr.behaviors.solid,
 		cr.behaviors.Platform,
 		cr.behaviors.LOS,
+		cr.behaviors.Sin,
 		cr.plugins_.Touch,
 		cr.plugins_.Mouse,
 		cr.plugins_.Function,
@@ -34256,7 +34234,8 @@ cr.getObjectRefTable = function () {
 		cr.behaviors.Platform.prototype.acts.SimulateControl,
 		cr.behaviors.LOS.prototype.cnds.HasLOSToObject,
 		cr.behaviors.Physics.prototype.acts.SetImmovable,
-		cr.plugins_.Sprite.prototype.acts.SetAngle
+		cr.plugins_.Sprite.prototype.acts.SetAngle,
+		cr.system_object.prototype.exps.newline
 	];
 };
 
